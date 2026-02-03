@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document Search Engine</title>
+    <link rel="icon" type="image/png" href="/static/favicon.png">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-content">
+            <h1 class="logo">Document Search</h1>
+            <button class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode">
+                <span class="theme-text">Dark</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="container">
+        <!-- Upload Section -->
+        <section class="upload-section">
+            <div class="upload-card">
+                <h2>Upload Documents</h2>
+                <div class="upload-area" id="uploadArea">
+                    <div class="upload-icon">📁</div>
+                    <p class="upload-text">Drag & drop files here</p>
+                    <p class="upload-subtext">or click to browse</p>
+                    <p class="upload-formats">PDF, DOCX, CSV files supported</p>
+                    <input type="file" id="fileInput" multiple accept=".pdf,.docx,.csv" hidden>
+                </div>
+                <div class="upload-status" id="uploadStatus"></div>
+            </div>
+
+            <!-- Document List -->
+            <div class="documents-card" id="documentsCard">
+                <h3>Uploaded Documents</h3>
+                <div class="documents-list" id="documentsList">
+                    <p class="empty-state">No documents uploaded yet</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Search Section -->
+        <section class="search-section">
+            <div class="search-card">
+                <h2>Ask a Question</h2>
+                <div class="search-input-wrapper">
+                    <input type="text" id="questionInput" class="search-input"
+                        placeholder="What would you like to know?" autocomplete="off">
+                    <button class="search-button" id="searchButton">
+                        <span class="search-icon">→</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Answer Display -->
+            <div class="answer-card" id="answerCard" style="display: none;">
+                <div class="answer-header">
+                    <h3>Answer</h3>
+                    <span class="answer-source" id="answerSource"></span>
+                </div>
+                <div class="answer-content" id="answerContent"></div>
+            </div>
+
+            <!-- Loading State -->
+            <div class="loading-state" id="loadingState" style="display: none;">
+                <div class="loading-spinner"></div>
+                <p>Searching documents...</p>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <p>Powered by LangChain & Groq • Built with ❤️</p>
+    </footer>
+
+    <script src="/static/js/app.js"></script>
+</body>
+
+</html>

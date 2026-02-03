@@ -1,0 +1,5 @@
+# uploads/ directory
+# This folder stores user-uploaded documents
+*.pdf
+*.docx
+*.csv
