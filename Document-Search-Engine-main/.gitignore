@@ -1,23 +1,21 @@
-# Environment variables - NEVER commit this!
+# Environment variables with secrets
 .env
 
 # Python cache
 __pycache__/
-*.py[cod]
-*$py.class
-*.so
-
-# Virtual environment
-venv/
-env/
-ENV/
-
-# Uploads directory - user uploaded files
-uploads/*
-!uploads/.gitignore
+*.pyc
+*.pyo
+*.pyd
+.Python
 
 # Jupyter Notebook
 .ipynb_checkpoints
+*/.ipynb_checkpoints/*
+
+# Virtual environments
+venv/
+env/
+ENV/
 
 # IDE
 .vscode/
@@ -26,6 +24,3 @@ uploads/*
 # OS
 .DS_Store
 Thumbs.db
-
-# Backup files
-*_backup_*.ipynb

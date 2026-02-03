@@ -31,10 +31,10 @@ class DocumentProcessor:
         if not self.groq_api_key:
             raise ValueError("GROQ_API_KEY not found in .env file")
         
-        # Initialize embeddings model
-        print("Loading embeddings model...")
+        # Initialize embeddings model (smaller model for free tier deployment)
+        print("Loading embeddings model (all-MiniLM-L6-v2)...")
         self.embeddings = HuggingFaceEmbeddings(
-            model_name="sentence-transformers/all-mpnet-base-v2",
+            model_name="sentence-transformers/all-MiniLM-L6-v2",
             encode_kwargs={"normalize_embeddings": True}
         )
         
