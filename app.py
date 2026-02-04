@@ -172,16 +172,25 @@ def upload_file():
         }), 400
     
     try:
-        # Reinitialize processor with new documents
+        # Incremental update instead of full re-initialization
         global doc_processor, processor_initialized
-        doc_processor = DocumentProcessor()
-        success = doc_processor.initialize()
-        processor_initialized = success
         
-        if success:
-            message = f'Successfully uploaded {len(uploaded_files)} file(s)'
+        if not doc_processor:
+            doc_processor = DocumentProcessor()
+            processor_initialized = True
+            
+        success_count = 0
+        for filename in uploaded_files:
+            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            if doc_processor.process_file(filepath):
+                success_count += 1
+            else:
+                errors.append(f"Failed to process {filename}")
+        
+        if success_count > 0:
+            message = f'Successfully uploaded & processed {success_count} file(s)'
             if errors:
-                message += f'. {len(errors)} file(s) failed: {"; ".join(errors)}'
+                message += f'. Errors: {"; ".join(errors)}'
             
             return jsonify({
                 'success': True,
@@ -192,13 +201,13 @@ def upload_file():
         else:
             return jsonify({
                 'success': False,
-                'error': 'Files uploaded but failed to process documents'
+                'error': f'Failed to process files. {"; ".join(errors)}'
             }), 500
             
     except Exception as e:
         return jsonify({
             'success': False,
-            'error': f'Upload failed: {str(e)}'
+            'error': f'Upload processing failed: {str(e)}'
         }), 500
 
 

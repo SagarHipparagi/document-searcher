@@ -1,6 +1,6 @@
 """
 Document Processor - RAG Logic for Multi-Document Search
-Handles PDF, DOCX, and CSV documents with intelligent routing
+Handles PDF, DOCX, and CSV documents with intelligent routing and incremental loading.
 """
 
 import os
@@ -31,7 +31,7 @@ class DocumentProcessor:
         if not self.groq_api_key:
             raise ValueError("GROQ_API_KEY not found in .env file")
         
-        # Initialize embeddings model (smaller model for free tier deployment)
+        # Initialize embeddings model
         print("Loading embeddings model (all-MiniLM-L6-v2)...")
         self.embeddings = HuggingFaceEmbeddings(
             model_name="sentence-transformers/all-MiniLM-L6-v2",
@@ -53,81 +53,75 @@ class DocumentProcessor:
         self.router_chain = None
         
         print("✅ Document processor initialized")
-    
-    def load_documents(self, directory: str = "uploads") -> Dict[str, int]:
-        """Load all documents from directory"""
-        if not os.path.exists(directory):
-            os.makedirs(directory)
-            return {'pdf': 0, 'docx': 0, 'csv': 0}
-        
-        counts = {'pdf': 0, 'docx': 0, 'csv': 0}
-        
-        # Load PDFs
-        for pdf_file in glob.glob(f"{directory}/*.pdf"):
-            loader = PyPDFLoader(pdf_file)
+
+    def _get_loader_for_file(self, filepath: str):
+        """Get appropriate loader for file extension"""
+        ext = filepath.split('.')[-1].lower()
+        if ext == 'pdf':
+            return PyPDFLoader(filepath), 'pdf'
+        elif ext == 'docx':
+            return Docx2txtLoader(filepath), 'docx'
+        elif ext == 'csv':
+            return CSVLoader(file_path=filepath), 'csv'
+        else:
+            raise ValueError(f"Unsupported file extension: {ext}")
+
+    def process_file(self, filepath: str) -> bool:
+        """Process a single file incrementally"""
+        if not os.path.exists(filepath):
+            return False
+            
+        try:
+            print(f"🔄 Processing file: {filepath}")
+            loader, doc_type = self._get_loader_for_file(filepath)
             docs = loader.load()
+            
+            # Add metadata
             for doc in docs:
-                doc.metadata['doc_type'] = 'pdf'
-                doc.metadata['filename'] = os.path.basename(pdf_file)
-            self.documents_by_type['pdf'].extend(docs)
-            counts['pdf'] += 1
-        
-        # Load DOCX
-        for docx_file in glob.glob(f"{directory}/*.docx"):
-            loader = Docx2txtLoader(docx_file)
-            docs = loader.load()
-            for doc in docs:
-                doc.metadata['doc_type'] = 'docx'
-                doc.metadata['filename'] = os.path.basename(docx_file)
-            self.documents_by_type['docx'].extend(docs)
-            counts['docx'] += 1
-        
-        # Load CSV
-        for csv_file in glob.glob(f"{directory}/*.csv"):
-            loader = CSVLoader(file_path=csv_file)
-            docs = loader.load()
-            for doc in docs:
-                doc.metadata['doc_type'] = 'csv'
-                doc.metadata['filename'] = os.path.basename(csv_file)
-            self.documents_by_type['csv'].extend(docs)
-            counts['csv'] += 1
-        
-        return counts
-    
-    def create_vector_stores(self):
-        """Create vector stores for each document type"""
-        # PDF vector store
-        if self.documents_by_type['pdf']:
-            self.vector_stores['pdf'] = DocArrayInMemorySearch.from_documents(
-                self.documents_by_type['pdf'],
+                doc.metadata['doc_type'] = doc_type
+                doc.metadata['filename'] = os.path.basename(filepath)
+            
+            # Update local storage
+            self.documents_by_type[doc_type].extend(docs)
+            
+            # Incremental Vector Store Update
+            self._update_vector_store(doc_type, docs)
+            
+            # Ensure router exists (idempotent)
+            if not self.router_chain:
+                self.create_router()
+                
+            return True
+        except Exception as e:
+            print(f"❌ Error processing file {filepath}: {str(e)}")
+            return False
+
+    def _update_vector_store(self, doc_type: str, new_docs: List[Document]):
+        """Add documents to vector store, creating if necessary"""
+        # If store exists, add to it
+        if doc_type in self.vector_stores:
+            print(f"➕ Adding {len(new_docs)} docs to existing {doc_type} store")
+            self.vector_stores[doc_type].add_documents(new_docs)
+            # Retrievers automatically see new docs in the store usually, 
+            # but DocArrayInMemorySearch creates a new index. 
+            # Let's verify if we need to recreate the retriever. 
+            # Usually 'as_retriever' just wraps the store.
+        else:
+            # Create new store
+            print(f"🆕 Creating new vector store for {doc_type}")
+            k = 10 if doc_type == 'csv' else 5
+            self.vector_stores[doc_type] = DocArrayInMemorySearch.from_documents(
+                new_docs,
                 self.embeddings
             )
-            self.retrievers['pdf'] = self.vector_stores['pdf'].as_retriever(
-                search_kwargs={"k": 5}
+            self.retrievers[doc_type] = self.vector_stores[doc_type].as_retriever(
+                search_kwargs={"k": k}
             )
-        
-        # DOCX vector store
-        if self.documents_by_type['docx']:
-            self.vector_stores['docx'] = DocArrayInMemorySearch.from_documents(
-                self.documents_by_type['docx'],
-                self.embeddings
-            )
-            self.retrievers['docx'] = self.vector_stores['docx'].as_retriever(
-                search_kwargs={"k": 5}
-            )
-        
-        # CSV vector store
-        if self.documents_by_type['csv']:
-            self.vector_stores['csv'] = DocArrayInMemorySearch.from_documents(
-                self.documents_by_type['csv'],
-                self.embeddings
-            )
-            self.retrievers['csv'] = self.vector_stores['csv'].as_retriever(
-                search_kwargs={"k": 10}
-            )
-    
-    def create_qa_chains(self):
-        """Create QA chains for each document type"""
+            # Create QA chain for this new type
+            self._create_qa_chain_for_type(doc_type)
+
+    def _create_qa_chain_for_type(self, doc_type: str):
+        """Create QA chain for a specific document type"""
         qa_prompt = ChatPromptTemplate.from_template(
             """You are an assistant for question-answering tasks. Use the following pieces of retrieved context to answer the question. If you don't know the answer, say that you don't know.
 
@@ -141,14 +135,39 @@ Answer:"""
         def format_docs(docs):
             return "\n\n".join(doc.page_content for doc in docs)
         
-        for doc_type, retriever in self.retrievers.items():
-            self.qa_chains[doc_type] = (
-                {"context": retriever | format_docs, "question": RunnablePassthrough()}
-                | qa_prompt
-                | self.llm
-                | StrOutputParser()
-            )
+        self.qa_chains[doc_type] = (
+            {"context": self.retrievers[doc_type] | format_docs, "question": RunnablePassthrough()}
+            | qa_prompt
+            | self.llm
+            | StrOutputParser()
+        )
+
+    # Legacy bulk loader (kept for initialization)
+    def load_documents(self, directory: str = "uploads") -> Dict[str, int]:
+        """Load all documents from directory"""
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+            return {'pdf': 0, 'docx': 0, 'csv': 0}
+        
+        counts = {'pdf': 0, 'docx': 0, 'csv': 0}
+        
+        # Load all supported files
+        for ext in ['pdf', 'docx', 'csv']:
+            files = glob.glob(f"{directory}/*.{ext}")
+            for f in files:
+                if self.process_file(f):
+                    counts[ext] += 1
+                    
+        return counts
+
+    def create_vector_stores(self):
+        """Deprecated: Logic moved to process_file/_update_vector_store"""
+        pass
     
+    def create_qa_chains(self):
+        """Deprecated: Logic moved to process_file/_create_qa_chain_for_type"""
+        pass
+
     def create_router(self):
         """Create intelligent router"""
         router_template = """Given the user question below, classify it to route to the most relevant document type.
@@ -169,42 +188,36 @@ Classification:"""
     def initialize(self):
         """Full initialization: load docs, create stores, chains, and router"""
         print("🔄 Starting document initialization...")
+        # Just use load_documents which now uses process_file internally
         counts = self.load_documents()
         print(f"📚 Loaded documents: {counts}")
         
         if sum(counts.values()) == 0:
             print("❌ No documents found")
             return False
-        
-        print("🔨 Creating vector stores...")
-        self.create_vector_stores()
-        print(f"✅ Vector stores created for: {list(self.vector_stores.keys())}")
-        
-        print("⚙️  Creating QA chains...")
-        self.create_qa_chains()
-        print(f"✅ QA chains created for: {list(self.qa_chains.keys())}")
-        
-        print("🧭 Creating router...")
-        self.create_router()
-        print("✅ Router created")
-        
-        print("🎉 Initialization complete!")
+            
+        print("✅ Initialization complete!")
         return True
     
     def query(self, question: str) -> Dict[str, any]:
         """Query the documents"""
-        if not self.router_chain or not self.qa_chains:
+        if not self.qa_chains:
             return {
                 'success': False,
                 'error': 'No documents loaded. Please upload documents first.'
             }
         
         try:
+            # Ensure router exists
+            if not self.router_chain:
+                self.create_router()
+
             # Route to appropriate document type
             doc_type = self.router_chain.invoke({"question": question}).strip().lower()
             
             # Validate
             if doc_type not in self.qa_chains:
+                # Fallback to first available chain
                 doc_type = list(self.qa_chains.keys())[0]
             
             # Get answer
@@ -233,4 +246,4 @@ Classification:"""
     def has_documents(self) -> bool:
         """Check if any documents are loaded"""
         total = sum(len(docs) for docs in self.documents_by_type.values())
-        return total > 0 and len(self.qa_chains) > 0
+        return total > 0
