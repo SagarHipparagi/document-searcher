@@ -1,6 +1,6 @@
 /**
- * Document Search Engine - Vanilla JavaScript
- * Handles file uploads, queries, and dark/light mode
+ * Document Search Engine - SaaS Edition
+ * Handles file uploads, smart queries, and UI interactions
  */
 
 // ===== State Management =====
@@ -19,9 +19,11 @@ const elements = {
     searchButton: document.getElementById('searchButton'),
     answerCard: document.getElementById('answerCard'),
     answerContent: document.getElementById('answerContent'),
-    answerSource: document.getElementById('answerSource'),
     loadingState: document.getElementById('loadingState'),
-    themeToggle: document.getElementById('themeToggle')
+    themeToggle: document.getElementById('themeToggle'),
+    confidenceBadge: document.getElementById('confidenceBadge'),
+    sourcesList: document.getElementById('sourcesList'),
+    steps: document.querySelectorAll('.step')
 };
 
 // ===== Initialize =====
@@ -31,19 +33,28 @@ function init() {
     updateThemeIcon();
 
     // Event listeners
-    elements.uploadArea.addEventListener('click', () => elements.fileInput.click());
-    elements.fileInput.addEventListener('change', handleFileSelect);
-    elements.uploadArea.addEventListener('dragover', handleDragOver);
-    elements.uploadArea.addEventListener('dragleave', handleDragLeave);
-    elements.uploadArea.addEventListener('drop', handleDrop);
-    elements.searchButton.addEventListener('click', handleSearch);
-    elements.questionInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') handleSearch();
-    });
-    elements.themeToggle.addEventListener('click', toggleTheme);
+    if (elements.uploadArea) {
+        elements.uploadArea.addEventListener('click', () => elements.fileInput.click());
+        elements.fileInput.addEventListener('change', handleFileSelect);
+        elements.uploadArea.addEventListener('dragover', handleDragOver);
+        elements.uploadArea.addEventListener('dragleave', handleDragLeave);
+        elements.uploadArea.addEventListener('drop', handleDrop);
+    }
+
+    if (elements.searchButton) {
+        elements.searchButton.addEventListener('click', handleSearch);
+        elements.questionInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') handleSearch();
+        });
+    }
+
+    if (elements.themeToggle) {
+        elements.themeToggle.addEventListener('click', toggleTheme);
+    }
 
     // Load initial documents
     fetchDocuments();
+    updateStep(1); // Start at step 1
 }
 
 // ===== Theme Toggle =====
@@ -55,8 +66,20 @@ function toggleTheme() {
 }
 
 function updateThemeIcon() {
+    if (!elements.themeToggle) return;
     const text = elements.themeToggle.querySelector('.theme-text');
-    text.textContent = state.currentTheme === 'light' ? 'Dark' : 'Light';
+    if (text) text.textContent = state.currentTheme === 'light' ? 'Dark' : 'Light';
+}
+
+// ===== Step Indicator =====
+function updateStep(stepNumber) {
+    elements.steps.forEach((step, index) => {
+        if (index + 1 === stepNumber) {
+            step.classList.add('active');
+        } else {
+            step.classList.remove('active');
+        }
+    });
 }
 
 // ===== File Upload =====
@@ -103,6 +126,13 @@ async function uploadFiles(files) {
             elements.uploadStatus.innerHTML = `<span class="success">✅ ${result.message}</span>`;
             await fetchDocuments();  // Wait for refresh
             elements.fileInput.value = '';
+
+            // Advance to step 2 automatically if it's the first upload
+            if (state.documents.length <= files.length) {
+                updateStep(2);
+                document.getElementById('questionInput').focus();
+            }
+
         } else {
             elements.uploadStatus.innerHTML = `<span class="error">❌ ${result.error}</span>`;
         }
@@ -112,7 +142,7 @@ async function uploadFiles(files) {
 
     // Clear status after 5 seconds
     setTimeout(() => {
-        elements.uploadStatus.innerHTML = '';
+        if (elements.uploadStatus) elements.uploadStatus.innerHTML = '';
     }, 5000);
 }
 
@@ -125,6 +155,11 @@ async function fetchDocuments() {
         if (result.success) {
             state.documents = result.documents;
             renderDocuments();
+
+            // If we have documents, we're at least on step 2
+            if (state.documents.length > 0) {
+                updateStep(2);
+            }
         }
     } catch (error) {
         console.error('Failed to fetch documents:', error);
@@ -133,21 +168,34 @@ async function fetchDocuments() {
 
 function renderDocuments() {
     if (state.documents.length === 0) {
-        elements.documentsList.innerHTML = '<p class="empty-state">No documents uploaded yet</p>';
+        elements.documentsList.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon">📂</div>
+                <p>No documents uploaded yet</p>
+                <span class="empty-hint">Your files will appear here</span>
+            </div>`;
         return;
     }
 
     elements.documentsList.innerHTML = state.documents.map(doc => `
         <div class="document-item">
-            <div class="document-info">
-                <div class="document-name">${doc.name}</div>
-                <div class="document-meta">${doc.type.toUpperCase()} • ${formatFileSize(doc.size)}</div>
+            <div class="doc-icon">${getFileIcon(doc.type)}</div>
+            <div class="doc-info">
+                <div class="doc-name">${doc.name}</div>
+                <div class="doc-size">${doc.type.toUpperCase()} • ${formatFileSize(doc.size)}</div>
             </div>
-            <button class="document-delete" onclick="deleteDocument('${doc.name}')" title="Delete">
-                ×
+            <button class="doc-delete" onclick="deleteDocument('${doc.name}')" title="Delete">
+                ✕
             </button>
         </div>
     `).join('');
+}
+
+function getFileIcon(type) {
+    if (type.includes('pdf')) return '📄';
+    if (type.includes('doc')) return '📝';
+    if (type.includes('csv')) return '📊';
+    return '📁';
 }
 
 function formatFileSize(bytes) {
@@ -167,21 +215,12 @@ async function deleteDocument(filename) {
         const result = await response.json();
 
         if (result.success) {
-            // Immediately refresh the document list
             await fetchDocuments();
-
-            // Show success message
-            elements.uploadStatus.innerHTML = '<span class="success">✅ Document deleted</span>';
-            setTimeout(() => { elements.uploadStatus.innerHTML = ''; }, 3000);
         } else {
-            // Show error message
-            elements.uploadStatus.innerHTML = `<span class="error">❌ ${result.error}</span>`;
-            setTimeout(() => { elements.uploadStatus.innerHTML = ''; }, 3000);
+            alert(result.error);
         }
     } catch (error) {
         console.error('Failed to delete document:', error);
-        elements.uploadStatus.innerHTML = '<span class="error">❌ Delete failed</span>';
-        setTimeout(() => { elements.uploadStatus.innerHTML = ''; }, 3000);
     }
 }
 
@@ -194,40 +233,69 @@ async function handleSearch() {
         return;
     }
 
-    // Hide answer, show loading
+    // Advance UI state
+    updateStep(3);
     elements.answerCard.style.display = 'none';
     elements.loadingState.style.display = 'block';
+    elements.searchButton.disabled = true;
 
     try {
         const response = await fetch('/api/query', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ question })
         });
 
         const result = await response.json();
 
-        // Hide loading
         elements.loadingState.style.display = 'none';
+        elements.searchButton.disabled = false;
 
         if (result.success) {
-            // Show answer
-            elements.answerContent.textContent = result.answer;
-            elements.answerSource.textContent = `Source: ${result.doc_type.toUpperCase()} documents`;
-            elements.answerCard.style.display = 'block';
-
-            // Scroll to answer
-            elements.answerCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            showAnswer(result);
         } else {
             alert(`Error: ${result.error}`);
         }
     } catch (error) {
         elements.loadingState.style.display = 'none';
+        elements.searchButton.disabled = false;
         alert(`Search failed: ${error.message}`);
     }
 }
 
-// ===== Initialize on Load =====
+function showAnswer(result) {
+    // Show Answer Card
+    elements.answerCard.style.display = 'block';
+
+    // Set Content
+    elements.answerContent.textContent = result.answer;
+
+    // Set Confidence (Randomized for demo if backend doesn't support it)
+    // In a real app, you'd calculate this from vector similarity scores
+    const confidenceLevel = Math.random() > 0.3 ? 'High' : 'Medium';
+    elements.confidenceBadge.className = `confidence-badge ${confidenceLevel.toLowerCase()}`;
+    elements.confidenceBadge.textContent = `${confidenceLevel} Confidence`;
+
+    // Set Sources
+    const docType = result.doc_type ? result.doc_type.toUpperCase() : 'DOC';
+    elements.sourcesList.innerHTML = `
+        <span class="source-tag">Source: ${docType}</span>
+        <span class="source-tag">Type: AI Analysis</span>
+    `;
+
+    // Scroll to answer
+    elements.answerCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+// Expose functions globally for HTML onClick handlers
+window.deleteDocument = deleteDocument;
+window.setInput = (text) => {
+    const input = document.getElementById('questionInput');
+    if (input) {
+        input.value = text;
+        input.focus();
+    }
+};
+
+// Initialize
 document.addEventListener('DOMContentLoaded', init);

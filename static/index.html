@@ -4,83 +4,233 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document Search Engine</title>
+    <title>Document Search Engine - AI-Powered Search</title>
     <link rel="icon" type="image/png" href="/static/favicon.png">
     <link rel="stylesheet" href="/static/css/style.css">
 </head>
 
 <body>
-    <!-- Header -->
-    <header class="header">
-        <div class="header-content">
-            <h1 class="logo">Document Search</h1>
-            <button class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode">
-                <span class="theme-text">Dark</span>
-            </button>
+    <!-- Navbar -->
+    <nav class="navbar">
+        <div class="nav-content">
+            <a href="#" class="logo">Document Search Engine</a>
+            <div class="nav-links">
+                <a href="#features" class="nav-link">Features</a>
+                <a href="#how-it-works" class="nav-link">How It Works</a>
+                <a href="#pricing" class="nav-link">Pricing</a>
+                <a href="#contact" class="nav-link">Contact</a>
+            </div>
+            <div class="nav-actions">
+                <button class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode">
+                    <span class="theme-text">Dark</span>
+                </button>
+                <a href="#upload-section" class="btn btn-primary btn-sm">Get Started</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <header class="hero">
+        <div class="hero-content">
+            <h1 class="hero-title">Search Any Document Instantly with AI</h1>
+            <p class="hero-subtitle">Upload PDFs, DOCX, or CSV files and ask questions in natural language. Get accurate
+                answers cited directly from your source material.</p>
+            <div class="hero-actions">
+                <a href="#upload-section" class="btn btn-primary btn-lg">Upload Documents</a>
+                <button class="btn btn-secondary btn-lg">View Demo</button>
+            </div>
         </div>
     </header>
 
     <!-- Main Container -->
-    <main class="container">
-        <!-- Upload Section -->
+    <main class="container" id="upload-section">
+
+        <!-- Step Indicators -->
+        <div class="steps-container">
+            <div class="step active">
+                <div class="step-circle">1</div>
+                <div class="step-text">Upload Files</div>
+            </div>
+            <div class="step-line"></div>
+            <div class="step">
+                <div class="step-circle">2</div>
+                <div class="step-text">Ask Questions</div>
+            </div>
+            <div class="step-line"></div>
+            <div class="step">
+                <div class="step-circle">3</div>
+                <div class="step-text">Get AI Answers</div>
+            </div>
+        </div>
+
+        <!-- Upload & Document Section -->
         <section class="upload-section">
+            <!-- Upload Card -->
             <div class="upload-card">
                 <h2>Upload Documents</h2>
                 <div class="upload-area" id="uploadArea">
-                    <div class="upload-icon">📁</div>
+                    <div class="upload-animation">
+                        <span class="pulse-ring"></span>
+                        <div class="upload-icon-wrapper">
+                            <div class="upload-icon">📁</div>
+                        </div>
+                    </div>
                     <p class="upload-text">Drag & drop files here</p>
                     <p class="upload-subtext">or click to browse</p>
-                    <p class="upload-formats">PDF, DOCX, CSV files supported</p>
+                    <div class="supported-formats">
+                        <span class="format-badge">PDF</span>
+                        <span class="format-badge">DOCX</span>
+                        <span class="format-badge">CSV</span>
+                    </div>
                     <input type="file" id="fileInput" multiple accept=".pdf,.docx,.csv" hidden>
                 </div>
                 <div class="upload-status" id="uploadStatus"></div>
             </div>
 
-            <!-- Document List -->
-            <div class="documents-card" id="documentsCard">
+            <!-- Uploaded Documents Panel -->
+            <div class="documents-card">
                 <h3>Uploaded Documents</h3>
                 <div class="documents-list" id="documentsList">
-                    <p class="empty-state">No documents uploaded yet</p>
+                    <div class="empty-state">
+                        <div class="empty-icon">📂</div>
+                        <p>No documents uploaded yet</p>
+                        <span class="empty-hint">Your files will appear here</span>
+                    </div>
                 </div>
             </div>
         </section>
 
-        <!-- Search Section -->
-        <section class="search-section">
+        <!-- Question & Answer Section -->
+        <section class="qa-section">
+            <!-- Search Input -->
             <div class="search-card">
                 <h2>Ask a Question</h2>
                 <div class="search-input-wrapper">
                     <input type="text" id="questionInput" class="search-input"
-                        placeholder="What would you like to know?" autocomplete="off">
-                    <button class="search-button" id="searchButton">
+                        placeholder="e.g. What are the key findings in the report?" autocomplete="off">
+                    <button class="search-button" id="searchButton" aria-label="Search">
                         <span class="search-icon">→</span>
                     </button>
                 </div>
-            </div>
 
-            <!-- Answer Display -->
-            <div class="answer-card" id="answerCard" style="display: none;">
-                <div class="answer-header">
-                    <h3>Answer</h3>
-                    <span class="answer-source" id="answerSource"></span>
+                <!-- Suggestion Chips -->
+                <div class="suggestion-chips">
+                    <button class="chip" onclick="setInput('Summarize this document')">Sparkles Summarize this
+                        document</button>
+                    <button class="chip" onclick="setInput('Find key points')">🎯 Find key points</button>
+                    <button class="chip" onclick="setInput('Extract important dates')">📅 Extract important
+                        dates</button>
                 </div>
-                <div class="answer-content" id="answerContent"></div>
             </div>
 
             <!-- Loading State -->
             <div class="loading-state" id="loadingState" style="display: none;">
-                <div class="loading-spinner"></div>
-                <p>Searching documents...</p>
+                <div class="ai-loader">
+                    <div class="bar"></div>
+                    <div class="bar"></div>
+                    <div class="bar"></div>
+                </div>
+                <p>AI is analyzing your documents...</p>
+            </div>
+
+            <!-- AI Answer Output -->
+            <div class="answer-card" id="answerCard" style="display: none;">
+                <div class="answer-header">
+                    <div class="answer-title-group">
+                        <div class="ai-avatar">✨</div>
+                        <h3>AI Answer</h3>
+                    </div>
+                    <div class="confidence-badge high" id="confidenceBadge">
+                        High Confidence
+                    </div>
+                </div>
+
+                <div class="answer-content" id="answerContent"></div>
+
+                <div class="answer-footer">
+                    <div class="sources-list" id="sourcesList">
+                        <!-- Citations will be injected here -->
+                    </div>
+                    <div class="action-buttons">
+                        <button class="action-btn" onclick="copyAnswer()" title="Copy to clipboard">📋 Copy</button>
+                        <button class="action-btn" title="Regenerate answer">🔄 Regenerate</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Features Section (Why Choose This Tool) -->
+        <section class="features-section" id="features">
+            <h2 class="features-title">Why Choose This Tool?</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">⚡</div>
+                    <h3>Fast Semantic Search</h3>
+                    <p>Instantly retrieve relevant info using advanced vector embeddings, not just keyword matching.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🤖</div>
+                    <h3>AI-Powered Answers</h3>
+                    <p>Get natural language responses generated by LLMs, citing the exact source paragraphs.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">🔒</div>
+                    <h3>Secure Local Processing</h3>
+                    <p>Your documents are processed locally/privately. We prioritize your data security.</p>
+                </div>
             </div>
         </section>
     </main>
 
     <!-- Footer -->
     <footer class="footer">
-        <p>Powered by LangChain & Groq • Built with ❤️</p>
+        <div class="footer-content">
+            <div class="footer-brand">
+                <span class="footer-logo">Document Search Engine</span>
+                <p>The intelligent way to query your knowledge base.</p>
+                <a href="https://github.com" target="_blank" class="github-link">
+                    <span class="github-icon">GitHub</span> View on GitHub
+                </a>
+            </div>
+            <div class="footer-links">
+                <div class="link-col">
+                    <h4>Product</h4>
+                    <a href="#features">Features</a>
+                    <a href="#demo">Live Demo</a>
+                    <a href="#pricing">Pricing</a>
+                </div>
+                <div class="link-col">
+                    <h4>Resources</h4>
+                    <a href="#">Documentation</a>
+                    <a href="#">API Reference</a>
+                    <a href="#">Community</a>
+                </div>
+                <div class="link-col">
+                    <h4>Company</h4>
+                    <a href="#">About</a>
+                    <a href="#">Careers</a>
+                    <a href="#">Contact</a>
+                </div>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>&copy; 2026 Document Search Engine. All rights reserved.</p>
+        </div>
     </footer>
 
     <script src="/static/js/app.js"></script>
+    <script>
+        function setInput(text) {
+            document.getElementById('questionInput').value = text;
+            document.getElementById('questionInput').focus();
+        }
+
+        function copyAnswer() {
+            const content = document.getElementById('answerContent').innerText;
+            navigator.clipboard.writeText(content);
+            // Optionally add toast notification here
+        }
+    </script>
 </body>
 
 </html>
