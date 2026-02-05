@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: document-search-engine
+    env: python
+    region: oregon
+    plan: free
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "gunicorn app:app --bind 0.0.0.0:$PORT --timeout 120"
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false  # You'll set this manually in dashboard
+      - key: TF_ENABLE_ONEDNN_OPTS
+        value: "0"
+    autoDeploy: true

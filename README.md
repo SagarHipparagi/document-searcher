@@ -1,6 +1,6 @@
 # 🔍 My Multi-Document Search Engine
 
-I built this to stop jumping between spreadsheets, PDFs, and Word docs every time I need a simple answer. Now I just ask a question, and the system figures out where to look (CSV, PDF, or DOCX) and gives me a straight answer with sources. It’s fast, local for retrieval, and easy to extend.
+I built this to stop jumping between spreadsheets, PDFs, and Word docs every time I need a simple answer. Now I just ask a question, and the system figures out where to look (CSV, PDF, or DOCX) and gives me a straight answer with sources. It's fast, local for retrieval, and easy to extend.
 
 -I used sentence-transformers/all-mpnet-base-v2 (768 dimensions) embedding model from HuggingFace to create vectors
 -I used opensource model openai/gpt-oss-20b:free from Openrouter.
@@ -8,7 +8,7 @@ I built this to stop jumping between spreadsheets, PDFs, and Word docs every tim
 If you're just getting started, you can follow exactly what I do:
 - I first install the requirements from requirements.txt
 - Then I open the notebook `miniLM.ipynb` and run all cells
-- Finally, I ask real questions like “Who won the Singapore Grand Prix 2025?” or “Summarize the PDF report”
+- Finally, I ask real questions like "Who won the Singapore Grand Prix 2025?" or "Summarize the PDF report"
 
 Why I built this (in one line): I wanted a single place to ask questions across different document types without reformatting or switching tools.
 
@@ -71,7 +71,7 @@ OPENROUTER_API_KEY=your_api_key_here
 
 ## How I use it day-to-day
 
-### Option 1: Jupyter Notebook (when I’m exploring)
+### Option 1: Jupyter Notebook (when I'm exploring)
 
 1. Place your documents (PDF, DOCX, CSV) in the project directory
 
@@ -82,7 +82,7 @@ OPENROUTER_API_KEY=your_api_key_here
 query_documents("Your question here")
 ```
 
-### Option 2: Python Script (when I’m automating)
+### Option 2: Python Script (when I'm automating)
 
 1. Place your documents in the project directory
 

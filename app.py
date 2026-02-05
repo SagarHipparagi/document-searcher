@@ -45,8 +45,18 @@ def initialize_processor():
         success = doc_processor.initialize()
         processor_initialized = success
         return success
+    except ValueError as e:
+        # Specific handling for missing API key
+        if "GROQ_API_KEY" in str(e):
+            print("❌ DEPLOYMENT ERROR: GROQ_API_KEY environment variable not found!")
+            print("📝 Fix: Add GROQ_API_KEY to your deployment platform's environment variables")
+            print("   - Render: Dashboard → Environment → Add Environment Variable")
+            print("   - Heroku: heroku config:set GROQ_API_KEY=your_key_here")
+        raise
     except Exception as e:
         print(f"❌ Error initializing processor: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return False
 
 
@@ -204,6 +214,17 @@ def upload_file():
                 'error': f'Failed to process files. {"; ".join(errors)}'
             }), 500
             
+    except ValueError as e:
+        # Check if it's API key error
+        if "GROQ_API_KEY" in str(e):
+            return jsonify({
+                'success': False,
+                'error': 'Server configuration error: GROQ_API_KEY not set. Contact administrator.'
+            }), 500
+        return jsonify({
+            'success': False,
+            'error': f'Upload processing failed: {str(e)}'
+        }), 500
     except Exception as e:
         return jsonify({
             'success': False,
