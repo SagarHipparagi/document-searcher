@@ -36,6 +36,21 @@ class TfidfRetriever:
     def __init__(self, documents: List[Document], k: int = 5):
         self.documents = documents
         self.k = k
+        
+        # Filter out empty documents
+        self.doc_texts = []
+        valid_docs = []
+        for doc in documents:
+            text = doc.page_content.strip() if hasattr(doc, 'page_content') else ''
+            if text:  # Only include non-empty documents
+                self.doc_texts.append(text)
+                valid_docs.append(doc)
+        
+        self.documents = valid_docs
+        
+        if not self.doc_texts:
+            raise ValueError("No valid documents to index")
+        
         self.vectorizer = TfidfVectorizer(
             max_features=1000,
             stop_words='english',
@@ -43,7 +58,6 @@ class TfidfRetriever:
         )
         
         # Fit on document contents
-        self.doc_texts = [doc.page_content for doc in documents]
         self.tfidf_matrix = self.vectorizer.fit_transform(self.doc_texts)
     
     def get_relevant_documents(self, query: str) -> List[Document]:
@@ -134,6 +148,8 @@ class DocumentProcessor:
             return True
         except Exception as e:
             print(f"❌ Error processing file {filepath}: {str(e)}")
+            import traceback
+            traceback.print_exc()  # Print full stack trace for debugging
             return False
 
     def _rebuild_retriever(self, doc_type: str):
