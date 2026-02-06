@@ -9,6 +9,44 @@ const state = {
     currentTheme: localStorage.getItem('theme') || 'light'
 };
 
+// ===== Helper Functions =====
+/**
+ * Safely parse JSON response, handling non-JSON errors
+ */
+async function safeJsonParse(response) {
+    const contentType = response.headers.get('content-type');
+
+    // Check if response is JSON
+    if (contentType && contentType.includes('application/json')) {
+        return await response.json();
+    }
+
+    // Non-JSON response (likely HTML error page)
+    const text = await response.text();
+
+    // Common error: file too large
+    if (response.status === 413) {
+        return {
+            success: false,
+            error: 'File too large. Maximum file size is 5MB per file.'
+        };
+    }
+
+    // Server error
+    if (response.status >= 500) {
+        return {
+            success: false,
+            error: 'Server error. Please try again later.'
+        };
+    }
+
+    // Generic error
+    return {
+        success: false,
+        error: `Request failed with status ${response.status}`
+    };
+}
+
 // ===== DOM Elements =====
 const elements = {
     uploadArea: document.getElementById('uploadArea'),
@@ -120,7 +158,7 @@ async function uploadFiles(files) {
             body: formData
         });
 
-        const result = await response.json();
+        const result = await safeJsonParse(response);
 
         if (result.success) {
             elements.uploadStatus.innerHTML = `<span class="success">✅ ${result.message}</span>`;
@@ -150,7 +188,7 @@ async function uploadFiles(files) {
 async function fetchDocuments() {
     try {
         const response = await fetch('/api/documents');
-        const result = await response.json();
+        const result = await safeJsonParse(response);
 
         if (result.success) {
             state.documents = result.documents;
@@ -215,7 +253,7 @@ async function deleteDocument(filename) {
             method: 'DELETE'
         });
 
-        const result = await response.json();
+        const result = await safeJsonParse(response);
 
         if (result.success) {
             await fetchDocuments();
@@ -249,7 +287,7 @@ async function handleSearch() {
             body: JSON.stringify({ question })
         });
 
-        const result = await response.json();
+        const result = await safeJsonParse(response);
 
         elements.loadingState.style.display = 'none';
         elements.searchButton.disabled = false;
