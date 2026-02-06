@@ -1,48 +1,75 @@
 """
 Document Processor - RAG Logic for Multi-Document Search
 Handles PDF, DOCX, and CSV documents with intelligent routing and incremental loading.
+Uses TF-IDF for memory-efficient embeddings.
 """
 
 import os
 import gc
 import glob
+import pickle
 from typing import List, Dict, Optional
 from dotenv import load_dotenv
 
+# Scikit-learn for TF-IDF (memory efficient)
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+import numpy as np
+
 # LangChain imports
 from langchain_groq import ChatGroq
-from langchain_community.vectorstores import DocArrayInMemorySearch
 from langchain_community.document_loaders import CSVLoader, PyPDFLoader, Docx2txtLoader
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.documents import Document
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough
-from langchain_huggingface import HuggingFaceEmbeddings
 
 # Load environment variables
 load_dotenv()
 
 # Memory optimization: Limit total documents
-MAX_DOCUMENTS = int(os.getenv('MAX_DOCUMENTS', '20'))
+MAX_DOCUMENTS = int(os.getenv('MAX_DOCUMENTS', '10'))
+
+class TfidfRetriever:
+    """Memory-efficient retriever using TF-IDF instead of transformer embeddings"""
+    
+    def __init__(self, documents: List[Document], k: int = 5):
+        self.documents = documents
+        self.k = k
+        self.vectorizer = TfidfVectorizer(
+            max_features=1000,
+            stop_words='english',
+            ngram_range=(1, 2)
+        )
+        
+        # Fit on document contents
+        self.doc_texts = [doc.page_content for doc in documents]
+        self.tfidf_matrix = self.vectorizer.fit_transform(self.doc_texts)
+    
+    def get_relevant_documents(self, query: str) -> List[Document]:
+        """Retrieve top-k most relevant documents"""
+        query_vec = self.vectorizer.transform([query])
+        similarities = cosine_similarity(query_vec, self.tfidf_matrix).flatten()
+        top_indices = np.argsort(similarities)[-self.k:][::-1]
+        return [self.documents[i] for i in top_indices]
+    
+    def invoke(self, query: str) -> List[Document]:
+        """LangChain compatibility"""
+        return self.get_relevant_documents(query)
+
 
 class DocumentProcessor:
     """Handles document loading, indexing, and querying"""
     
     def __init__(self):
-        """Initialize embeddings and LLM"""
+        """Initialize LLM (no heavy embedding model!)"""
         # Get API key
         self.groq_api_key = os.getenv('GROQ_API_KEY')
         if not self.groq_api_key:
             raise ValueError("GROQ_API_KEY not found in .env file")
         
-        # Initialize embeddings model
-        print("Loading embeddings model (all-MiniLM-L6-v2)...")
-        self.embeddings = HuggingFaceEmbeddings(
-            model_name="sentence-transformers/all-MiniLM-L6-v2",
-            encode_kwargs={"normalize_embeddings": True}
-        )
-        
-        # Initialize LLM
+        # Initialize LLM only (no heavy embeddings!)
+        print("Loading LLM...")
         self.llm = ChatGroq(
             temperature=0.0,
             api_key=self.groq_api_key,
@@ -51,12 +78,12 @@ class DocumentProcessor:
         
         # Storage - Only keep metadata, not full documents (memory optimization)
         self.document_metadata = {'pdf': [], 'docx': [], 'csv': []}  # Store filenames only
-        self.vector_stores = {}
+        self.documents_by_type = {'pdf': [], 'docx': [], 'csv': []}  # Store Document objects
         self.retrievers = {}
         self.qa_chains = {}
         self.router_chain = None
         
-        print("✅ Document processor initialized")
+        print("✅ Document processor initialized (TF-IDF mode)")
 
     def _get_loader_for_file(self, filepath: str):
         """Get appropriate loader for file extension"""
@@ -86,12 +113,15 @@ class DocumentProcessor:
                 doc.metadata['doc_type'] = doc_type
                 doc.metadata['filename'] = filename
             
+            # Store documents for this type
+            self.documents_by_type[doc_type].extend(docs)
+            
             # Store only metadata (memory optimization)
             if filename not in self.document_metadata[doc_type]:
                 self.document_metadata[doc_type].append(filename)
             
-            # Incremental Vector Store Update
-            self._update_vector_store(doc_type, docs)
+            # Rebuild retriever for this doc type
+            self._rebuild_retriever(doc_type)
             
             # Force garbage collection after processing (memory cleanup)
             del docs
@@ -106,32 +136,17 @@ class DocumentProcessor:
             print(f"❌ Error processing file {filepath}: {str(e)}")
             return False
 
-    def _update_vector_store(self, doc_type: str, new_docs: List[Document]):
-        """Add documents to vector store, creating if necessary"""
-        # If store exists, add to it
-        if doc_type in self.vector_stores:
-            print(f"➕ Adding {len(new_docs)} docs to existing {doc_type} store")
-            self.vector_stores[doc_type].add_documents(new_docs)
-            # Retrievers automatically see new docs in the store usually, 
-            # but DocArrayInMemorySearch creates a new index. 
-            # Let's verify if we need to recreate the retriever. 
-            # Usually 'as_retriever' just wraps the store.
-        else:
-            # Create new store
-            print(f"🆕 Creating new vector store for {doc_type}")
-            k = 10 if doc_type == 'csv' else 5
-            self.vector_stores[doc_type] = DocArrayInMemorySearch.from_documents(
-                new_docs,
-                self.embeddings
-            )
-            self.retrievers[doc_type] = self.vector_stores[doc_type].as_retriever(
-                search_kwargs={"k": k}
-            )
-            # Create QA chain for this new type
-            self._create_qa_chain_for_type(doc_type)
+    def _rebuild_retriever(self, doc_type: str):
+        """Rebuild TF-IDF retriever and QA chain for a document type"""
+        docs = self.documents_by_type[doc_type]
+        if not docs:
+            return
         
-        # Memory cleanup after vector store update
-        gc.collect()
+        k = 10 if doc_type == 'csv' else 5
+        print(f"🔄 Building TF-IDF retriever for {doc_type} ({len(docs)} docs)")
+        
+        self.retrievers[doc_type] = TfidfRetriever(docs, k=k)
+        self._create_qa_chain_for_type(doc_type)
 
     def _create_qa_chain_for_type(self, doc_type: str):
         """Create QA chain for a specific document type"""
@@ -173,14 +188,6 @@ Answer:"""
                     
         return counts
 
-    def create_vector_stores(self):
-        """Deprecated: Logic moved to process_file/_update_vector_store"""
-        pass
-    
-    def create_qa_chains(self):
-        """Deprecated: Logic moved to process_file/_create_qa_chain_for_type"""
-        pass
-
     def create_router(self):
         """Create intelligent router"""
         router_template = """Given the user question below, classify it to route to the most relevant document type.
@@ -199,9 +206,8 @@ Classification:"""
         self.router_chain = router_prompt | self.llm | StrOutputParser()
     
     def initialize(self):
-        """Full initialization: load docs, create stores, chains, and router"""
+        """Full initialization: load docs, create retrievers, chains, and router"""
         print("🔄 Starting document initialization...")
-        # Just use load_documents which now uses process_file internally
         counts = self.load_documents()
         print(f"📚 Loaded documents: {counts}")
         
