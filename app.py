@@ -4,10 +4,11 @@ Provides REST API endpoints and serves the web interface
 """
 
 import os
+import gc
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
-from document_processor import DocumentProcessor
+from document_processor import DocumentProcessor, MAX_DOCUMENTS
 
 # Initialize Flask app
 app = Flask(__name__, static_folder='static')
@@ -17,7 +18,7 @@ CORS(app)
 UPLOAD_FOLDER = 'uploads'
 ALLOWED_EXTENSIONS = {'pdf', 'docx', 'csv'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB max file size
+app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024  # 5MB max file size (memory optimization)
 
 # Ensure upload folder exists
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -127,11 +128,16 @@ def delete_document(filename):
         # Delete the file
         os.remove(filepath)
         
-        # Reinitialize processor
+        # Reinitialize processor with explicit cleanup
         global doc_processor, processor_initialized
+        old_processor = doc_processor
         doc_processor = DocumentProcessor()
         success = doc_processor.initialize()
         processor_initialized = success
+        
+        # Force garbage collection to free memory
+        del old_processor
+        gc.collect()
         
         return jsonify({
             'success': True,
@@ -147,6 +153,8 @@ def delete_document(filename):
 @app.route('/api/upload', methods=['POST'])
 def upload_file():
     """Handle file upload (supports multiple files)"""
+    global doc_processor
+    
     if 'files' not in request.files:
         return jsonify({'success': False, 'error': 'No files provided'}), 400
     
@@ -154,6 +162,17 @@ def upload_file():
     
     if not files or all(f.filename == '' for f in files):
         return jsonify({'success': False, 'error': 'No files selected'}), 400
+    
+    # Check document limit (memory optimization)
+    current_count = 0
+    if doc_processor:
+        current_count = doc_processor.get_total_document_count()
+    
+    if current_count + len(files) > MAX_DOCUMENTS:
+        return jsonify({
+            'success': False,
+            'error': f'Document limit exceeded. Maximum {MAX_DOCUMENTS} documents allowed. Current: {current_count}'
+        }), 400
     
     uploaded_files = []
     errors = []

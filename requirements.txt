@@ -25,3 +25,6 @@ flask>=3.0.0
 flask-cors>=4.0.0
 Werkzeug>=3.0.0
 gunicorn>=21.2.0
+
+# Monitoring
+psutil>=5.9.8

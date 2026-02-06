@@ -4,6 +4,7 @@ Handles PDF, DOCX, and CSV documents with intelligent routing and incremental lo
 """
 
 import os
+import gc
 import glob
 from typing import List, Dict, Optional
 from dotenv import load_dotenv
@@ -20,6 +21,9 @@ from langchain_huggingface import HuggingFaceEmbeddings
 
 # Load environment variables
 load_dotenv()
+
+# Memory optimization: Limit total documents
+MAX_DOCUMENTS = int(os.getenv('MAX_DOCUMENTS', '20'))
 
 class DocumentProcessor:
     """Handles document loading, indexing, and querying"""
@@ -45,8 +49,8 @@ class DocumentProcessor:
             model="llama-3.3-70b-versatile"
         )
         
-        # Storage
-        self.documents_by_type = {'pdf': [], 'docx': [], 'csv': []}
+        # Storage - Only keep metadata, not full documents (memory optimization)
+        self.document_metadata = {'pdf': [], 'docx': [], 'csv': []}  # Store filenames only
         self.vector_stores = {}
         self.retrievers = {}
         self.qa_chains = {}
@@ -77,15 +81,21 @@ class DocumentProcessor:
             docs = loader.load()
             
             # Add metadata
+            filename = os.path.basename(filepath)
             for doc in docs:
                 doc.metadata['doc_type'] = doc_type
-                doc.metadata['filename'] = os.path.basename(filepath)
+                doc.metadata['filename'] = filename
             
-            # Update local storage
-            self.documents_by_type[doc_type].extend(docs)
+            # Store only metadata (memory optimization)
+            if filename not in self.document_metadata[doc_type]:
+                self.document_metadata[doc_type].append(filename)
             
             # Incremental Vector Store Update
             self._update_vector_store(doc_type, docs)
+            
+            # Force garbage collection after processing (memory cleanup)
+            del docs
+            gc.collect()
             
             # Ensure router exists (idempotent)
             if not self.router_chain:
@@ -119,6 +129,9 @@ class DocumentProcessor:
             )
             # Create QA chain for this new type
             self._create_qa_chain_for_type(doc_type)
+        
+        # Memory cleanup after vector store update
+        gc.collect()
 
     def _create_qa_chain_for_type(self, doc_type: str):
         """Create QA chain for a specific document type"""
@@ -238,12 +251,17 @@ Classification:"""
     def get_document_count(self) -> Dict[str, int]:
         """Get count of loaded documents by type"""
         return {
-            'pdf': len(self.documents_by_type.get('pdf', [])),
-            'docx': len(self.documents_by_type.get('docx', [])),
-            'csv': len(self.documents_by_type.get('csv', []))
+            'pdf': len(self.document_metadata.get('pdf', [])),
+            'docx': len(self.document_metadata.get('docx', [])),
+            'csv': len(self.document_metadata.get('csv', []))
         }
+    
+    def get_total_document_count(self) -> int:
+        """Get total count of all loaded documents"""
+        counts = self.get_document_count()
+        return sum(counts.values())
     
     def has_documents(self) -> bool:
         """Check if any documents are loaded"""
-        total = sum(len(docs) for docs in self.documents_by_type.values())
+        total = sum(len(docs) for docs in self.document_metadata.values())
         return total > 0

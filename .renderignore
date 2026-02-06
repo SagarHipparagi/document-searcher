@@ -1,0 +1,11 @@
+*.ipynb
+*.pdf
+*.docx
+*.csv
+uploads/
+__pycache__/
+.git/
+.env
+Document-Search-Engine-main/
+*.pyc
+.DS_Store
