@@ -153,7 +153,7 @@ def delete_document(filename):
 @app.route('/api/upload', methods=['POST'])
 def upload_file():
     """Handle file upload (supports multiple files)"""
-    global doc_processor
+    global doc_processor, processor_initialized
     
     if 'files' not in request.files:
         return jsonify({'success': False, 'error': 'No files provided'}), 400
@@ -202,7 +202,6 @@ def upload_file():
     
     try:
         # Incremental update instead of full re-initialization
-        global doc_processor, processor_initialized
         
         if not doc_processor:
             doc_processor = DocumentProcessor()

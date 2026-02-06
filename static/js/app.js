@@ -146,6 +146,21 @@ function handleDrop(e) {
 async function uploadFiles(files) {
     if (files.length === 0) return;
 
+    // Validate file sizes BEFORE uploading
+    const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB in bytes
+    const oversizedFiles = files.filter(file => file.size > MAX_FILE_SIZE);
+
+    if (oversizedFiles.length > 0) {
+        const fileList = oversizedFiles.map(f => `• ${f.name} (${formatFileSize(f.size)})`).join('\n');
+        elements.uploadStatus.innerHTML = `<span class="error">❌ File size limit exceeded!<br><br>Maximum file size: 5MB<br><br>Files too large:<br>${fileList.replace(/\n/g, '<br>')}</span>`;
+
+        // Clear status after 8 seconds
+        setTimeout(() => {
+            if (elements.uploadStatus) elements.uploadStatus.innerHTML = '';
+        }, 8000);
+        return;
+    }
+
     // Show uploading status
     elements.uploadStatus.innerHTML = '<span class="info">⏳ Uploading files...</span>';
 
