@@ -1,0 +1,25 @@
+# Ignore during Docker build
+.git
+.gitignore
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+.env
+venv/
+env/
+ENV/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.ipynb
+.ipynb_checkpoints
+Document-Search-Engine-main/
+test_*.py
+DEPLOYMENT.md
+FIX_GUIDE.md
+MEMORY_OPTIMIZATION.md
+QUICKSTART.md
+README.md
