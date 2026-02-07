@@ -179,8 +179,13 @@ Answer:"""
         def format_docs(docs):
             return "\n\n".join(doc.page_content for doc in docs)
         
+        # Wrap retriever in RunnableLambda to make it compatible with LCEL
+        from langchain_core.runnables import RunnableLambda
+        
+        retriever_runnable = RunnableLambda(lambda x: self.retrievers[doc_type].invoke(x))
+        
         self.qa_chains[doc_type] = (
-            {"context": self.retrievers[doc_type] | format_docs, "question": RunnablePassthrough()}
+            {"context": retriever_runnable | format_docs, "question": RunnablePassthrough()}
             | qa_prompt
             | self.llm
             | StrOutputParser()

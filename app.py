@@ -208,11 +208,22 @@ def upload_file():
             processor_initialized = True
             
         success_count = 0
+        print(f"🔄 Processing {len(uploaded_files)} file(s)...", flush=True)
+        
         for filename in uploaded_files:
             filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            print(f"  → Processing {filename}...", flush=True)
+            
+            import time
+            start_time = time.time()
+            
             if doc_processor.process_file(filepath):
+                elapsed = time.time() - start_time
+                print(f"  ✓ {filename} processed in {elapsed:.1f}s", flush=True)
                 success_count += 1
             else:
+                elapsed = time.time() - start_time
+                print(f"  ✗ {filename} failed after {elapsed:.1f}s", flush=True)
                 errors.append(f"Failed to process {filename}")
         
         if success_count > 0:

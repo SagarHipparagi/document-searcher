@@ -151,18 +151,25 @@ async function uploadFiles(files) {
     const oversizedFiles = files.filter(file => file.size > MAX_FILE_SIZE);
 
     if (oversizedFiles.length > 0) {
-        const fileList = oversizedFiles.map(f => `• ${f.name} (${formatFileSize(f.size)})`).join('\n');
+        const fileList = oversizedFiles.map(f => `• ${f.name} (${formatFileSize(f.size)})`).join('\\n');
         elements.uploadStatus.innerHTML = `<span class="error">❌ File size limit exceeded!<br><br>Maximum file size: 5MB<br><br>Files too large:<br>${fileList.replace(/\n/g, '<br>')}</span>`;
 
-        // Clear status after 8 seconds
+        // Clear status after 10 seconds (increased from 8 for better readability)
         setTimeout(() => {
             if (elements.uploadStatus) elements.uploadStatus.innerHTML = '';
-        }, 8000);
+        }, 10000);
         return;
     }
 
-    // Show uploading status
-    elements.uploadStatus.innerHTML = '<span class="info">⏳ Uploading files...</span>';
+    // Disable upload area and show processing status
+    elements.uploadArea.classList.add('uploading');
+    elements.uploadStatus.innerHTML = `
+        <div class="upload-progress">
+            <div class="spinner"></div>
+            <span class="info">⏳ Processing files... this may take up to 60 seconds</span>
+            <span class="progress-hint">First upload loads AI models and may be slower</span>
+        </div>
+    `;
 
     const formData = new FormData();
     files.forEach(file => formData.append('files', file));
@@ -175,6 +182,9 @@ async function uploadFiles(files) {
 
         const result = await safeJsonParse(response);
 
+        // Re-enable upload area
+        elements.uploadArea.classList.remove('uploading');
+
         if (result.success) {
             elements.uploadStatus.innerHTML = `<span class="success">✅ ${result.message}</span>`;
             await fetchDocuments();  // Wait for refresh
@@ -186,17 +196,29 @@ async function uploadFiles(files) {
                 document.getElementById('questionInput').focus();
             }
 
+            // Clear success message after 5 seconds
+            setTimeout(() => {
+                if (elements.uploadStatus) elements.uploadStatus.innerHTML = '';
+            }, 5000);
+
         } else {
             elements.uploadStatus.innerHTML = `<span class="error">❌ ${result.error}</span>`;
+
+            // Keep error visible longer (10 seconds instead of 5)
+            setTimeout(() => {
+                if (elements.uploadStatus) elements.uploadStatus.innerHTML = '';
+            }, 10000);
         }
     } catch (error) {
+        // Re-enable upload area on error
+        elements.uploadArea.classList.remove('uploading');
         elements.uploadStatus.innerHTML = `<span class="error">❌ Upload failed: ${error.message}</span>`;
-    }
 
-    // Clear status after 5 seconds
-    setTimeout(() => {
-        if (elements.uploadStatus) elements.uploadStatus.innerHTML = '';
-    }, 5000);
+        // Keep error visible longer (10 seconds)
+        setTimeout(() => {
+            if (elements.uploadStatus) elements.uploadStatus.innerHTML = '';
+        }, 10000);
+    }
 }
 
 // ===== Document Management =====
